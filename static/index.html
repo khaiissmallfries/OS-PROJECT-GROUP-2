@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aid Station Resource Management - OS Concurrency & Deadlock Simulator</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-badge">OS GROUP 2</div>
+        <div>
+          <h1>Aid Station Resource Management Simulator</h1>
+          <p class="subtitle">Operating Systems Simulation: Concurrency • Semaphores • Mutexes • Condition Variables • Deadlock Avoidance</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btn-initial-setup" class="btn btn-secondary">
+          <span class="icon">⚙️</span> Initial Vault & Allocations
+        </button>
+        <button id="btn-quick-reset" class="btn btn-outline">
+          <span class="icon">🔄</span> Reset State
+        </button>
+      </div>
+    </header>
+
+    <!-- OS Live Telemetry Banner -->
+    <section class="telemetry-banner">
+      <div class="telemetry-card">
+        <div class="tel-label">VAULT MUTEX</div>
+        <div class="tel-val" id="tel-vault-mutex"><span class="badge badge-green">UNLOCKED</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="tel-label">OPERATOR THREAD (STATION D)</div>
+        <div class="tel-val" id="tel-operator-state"><span class="badge badge-blue">SLEEPING (cond.wait)</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="tel-label">STATION A MUTEX</div>
+        <div class="tel-val" id="tel-mutex-A"><span class="badge badge-green">UNLOCKED</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="tel-label">STATION B MUTEX</div>
+        <div class="tel-val" id="tel-mutex-B"><span class="badge badge-green">UNLOCKED</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="tel-label">STATION C MUTEX</div>
+        <div class="tel-val" id="tel-mutex-C"><span class="badge badge-green">UNLOCKED</span></div>
+      </div>
+      <div class="telemetry-card">
+        <div class="tel-label">DEADLOCK STATUS</div>
+        <div class="tel-val"><span class="badge badge-purple">NO CIRCULAR WAIT (FREE)</span></div>
+      </div>
+    </section>
+
+    <!-- Main Grid: Vault & Operator D -->
+    <div class="grid-2-col">
+      <!-- Central Vault (The Bank / Semaphores) -->
+      <div class="card vault-card">
+        <div class="card-header">
+          <div class="title-with-icon">
+            <span class="card-icon">🏦</span>
+            <div>
+              <h2>Central Vault (The Bank)</h2>
+              <span class="concept-tag tag-sem">Counting Semaphores (Capacity Control)</span>
+            </div>
+          </div>
+          <span class="status-indicator" id="vault-lock-indicator">Mutex Free</span>
+        </div>
+        <div class="card-body">
+          <p class="description">
+            The Central Vault holds all reserve event supplies. Each supply type is bounded by an OS <strong>Counting Semaphore</strong>. Station D decrements the semaphore atomically when restocking stations.
+          </p>
+
+          <div class="resource-gauges">
+            <div class="gauge-item">
+              <div class="gauge-head">
+                <span class="res-name"><span class="res-icon">💧</span> Drinks</span>
+                <span class="res-count" id="vault-drinks-count">-- / --</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-blue" id="vault-drinks-fill" style="width: 100%;"></div>
+              </div>
+              <div class="sem-tag">Semaphore: <span id="sem-val-drinks">--</span> units available</div>
+            </div>
+
+            <div class="gauge-item">
+              <div class="gauge-head">
+                <span class="res-name"><span class="res-icon">🍌</span> Snacks</span>
+                <span class="res-count" id="vault-snacks-count">-- / --</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-amber" id="vault-snacks-fill" style="width: 100%;"></div>
+              </div>
+              <div class="sem-tag">Semaphore: <span id="sem-val-snacks">--</span> units available</div>
+            </div>
+
+            <div class="gauge-item">
+              <div class="gauge-head">
+                <span class="res-name"><span class="res-icon">💊</span> Meds / Energy Gels</span>
+                <span class="res-count" id="vault-meds-count">-- / --</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-emerald" id="vault-meds-fill" style="width: 100%;"></div>
+              </div>
+              <div class="sem-tag">Semaphore: <span id="sem-val-meds">--</span> units available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Station D (The Operator / Producer Thread) -->
+      <div class="card operator-card">
+        <div class="card-header">
+          <div class="title-with-icon">
+            <span class="card-icon">👨‍💼</span>
+            <div>
+              <h2>Station D (Central Operator)</h2>
+              <span class="concept-tag tag-cond">Condition Variable & Producer Pattern</span>
+            </div>
+          </div>
+          <div class="operator-controls">
+            <button id="btn-toggle-auto" class="btn btn-sm btn-mode">
+              Mode: <strong id="mode-text">Autonomous</strong>
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="description">
+            Station D is the <strong>exclusive producer</strong> authorized to transfer supplies from Vault to stations. Station D thread sleeps on a <strong>Condition Variable</strong> (<code>wait()</code>) and wakes instantly (<code>notify()</code>) when an aid station's stock dips below threshold.
+          </p>
+
+          <div class="operator-status-box">
+            <div class="op-status-header">
+              <span class="pulsing-dot" id="op-dot"></span>
+              <strong id="op-status-title">Status: SLEEPING (Awaiting Low Stock Signal)</strong>
+            </div>
+            <div class="op-current-task" id="op-task-desc">Idle: CPU consumption 0% (no busy-waiting)</div>
+          </div>
+
+          <!-- Pending Alerts / Manual Dispatch Queue -->
+          <div class="alert-queue-section">
+            <div class="section-title">
+              <span>🔔 Incoming Low-Stock Signals</span>
+              <span class="count-pill" id="pending-count">0</span>
+            </div>
+            <div id="alerts-container" class="alerts-list">
+              <div class="empty-state">No low-stock alerts. All aid stations are adequately supplied.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section Title: Aid Stations -->
+    <div class="section-divider">
+      <h2>Aid Stations (Consumers & Mutex Protected Zones)</h2>
+      <p>Runners (Threads) take items from Stations A, B, and C. Each station's inventory is shielded by a dedicated <strong>Mutex Lock</strong>.</p>
+    </div>
+
+    <!-- Stations A, B, C Row -->
+    <div class="stations-grid">
+      <!-- Station A -->
+      <div class="card station-card" id="card-station-A">
+        <div class="station-header">
+          <div>
+            <h3>Aid Station A</h3>
+            <span class="station-meta">Mile 5 • High Intake</span>
+          </div>
+          <span class="mutex-badge" id="mutex-badge-A">MUTEX: FREE</span>
+        </div>
+        <div class="station-body">
+          <div class="stock-row" id="stock-row-A-drinks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💧</span> Drinks</span>
+              <span class="item-num" id="stock-A-drinks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-A-drinks">8</span></div>
+            <button class="btn-take" onclick="takeItem('A', 'drinks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-A-snacks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">🍌</span> Snacks</span>
+              <span class="item-num" id="stock-A-snacks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-A-snacks">6</span></div>
+            <button class="btn-take" onclick="takeItem('A', 'snacks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-A-meds">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💊</span> Meds</span>
+              <span class="item-num" id="stock-A-meds">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-A-meds">4</span></div>
+            <button class="btn-take" onclick="takeItem('A', 'meds', 1)">Take 1</button>
+          </div>
+
+          <div class="station-actions">
+            <button class="btn btn-sm btn-combo" onclick="takeCombo('A')">⚡ Runner Combo (1 Each)</button>
+            <div class="station-stats">Served: <span id="served-A">0</span> runners</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Station B -->
+      <div class="card station-card" id="card-station-B">
+        <div class="station-header">
+          <div>
+            <h3>Aid Station B</h3>
+            <span class="station-meta">Mile 13 • Halfway Hub</span>
+          </div>
+          <span class="mutex-badge" id="mutex-badge-B">MUTEX: FREE</span>
+        </div>
+        <div class="station-body">
+          <div class="stock-row" id="stock-row-B-drinks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💧</span> Drinks</span>
+              <span class="item-num" id="stock-B-drinks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-B-drinks">10</span></div>
+            <button class="btn-take" onclick="takeItem('B', 'drinks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-B-snacks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">🍌</span> Snacks</span>
+              <span class="item-num" id="stock-B-snacks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-B-snacks">8</span></div>
+            <button class="btn-take" onclick="takeItem('B', 'snacks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-B-meds">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💊</span> Meds</span>
+              <span class="item-num" id="stock-B-meds">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-B-meds">5</span></div>
+            <button class="btn-take" onclick="takeItem('B', 'meds', 1)">Take 1</button>
+          </div>
+
+          <div class="station-actions">
+            <button class="btn btn-sm btn-combo" onclick="takeCombo('B')">⚡ Runner Combo (1 Each)</button>
+            <div class="station-stats">Served: <span id="served-B">0</span> runners</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Station C -->
+      <div class="card station-card" id="card-station-C">
+        <div class="station-header">
+          <div>
+            <h3>Aid Station C</h3>
+            <span class="station-meta">Mile 26 • Finish Line</span>
+          </div>
+          <span class="mutex-badge" id="mutex-badge-C">MUTEX: FREE</span>
+        </div>
+        <div class="station-body">
+          <div class="stock-row" id="stock-row-C-drinks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💧</span> Drinks</span>
+              <span class="item-num" id="stock-C-drinks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-C-drinks">12</span></div>
+            <button class="btn-take" onclick="takeItem('C', 'drinks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-C-snacks">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">🍌</span> Snacks</span>
+              <span class="item-num" id="stock-C-snacks">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-C-snacks">8</span></div>
+            <button class="btn-take" onclick="takeItem('C', 'snacks', 1)">Take 1</button>
+          </div>
+
+          <div class="stock-row" id="stock-row-C-meds">
+            <div class="stock-info">
+              <span class="item-name"><span class="res-icon">💊</span> Meds</span>
+              <span class="item-num" id="stock-C-meds">0</span>
+            </div>
+            <div class="thresh-info">Threshold: <span id="thresh-C-meds">6</span></div>
+            <button class="btn-take" onclick="takeItem('C', 'meds', 1)">Take 1</button>
+          </div>
+
+          <div class="station-actions">
+            <button class="btn btn-sm btn-combo" onclick="takeCombo('C')">⚡ Runner Combo (1 Each)</button>
+            <div class="station-stats">Served: <span id="served-C">0</span> runners</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Concurrency Stress Test & Race Condition Simulator -->
+    <div class="card stress-card">
+      <div class="card-header">
+        <div class="title-with-icon">
+          <span class="card-icon">⚡</span>
+          <div>
+            <h2>Concurrency & Race Condition Laboratory</h2>
+            <span class="concept-tag tag-rush">Simultaneous Multi-Threaded Stress Testing</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="description">
+          Simulate a marathon rush by spawning up to 100 concurrent runner threads arriving at the aid stations simultaneously. Compare execution <strong>With Mutex Locks (Thread-Safe)</strong> versus <strong>Without Mutex (Exposing Lost Updates & Race Conditions)</strong>.
+        </p>
+
+        <div class="stress-controls-grid">
+          <div class="control-group">
+            <label>Concurrent Runner Threads: <strong id="runner-val-display">30</strong></label>
+            <input type="range" id="slider-runners" min="5" max="100" value="30" step="5">
+          </div>
+
+          <div class="control-group">
+            <label>Resource to Grab:</label>
+            <select id="stress-item-select" class="form-select">
+              <option value="drinks">Drinks (Hydration Surge)</option>
+              <option value="snacks">Snacks (Carb Surge)</option>
+              <option value="meds">Medications / Gels (Medical Surge)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Station Targets:</label>
+            <select id="stress-station-select" class="form-select">
+              <option value="all">All Stations (A, B, C Distributed)</option>
+              <option value="A">Station A Only</option>
+              <option value="B">Station B Only</option>
+              <option value="C">Station C Only</option>
+            </select>
+          </div>
+
+          <div class="control-group checkbox-group">
+            <label class="toggle-container">
+              <input type="checkbox" id="check-use-mutex" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label"><strong>Enable Mutex Locks</strong> (Thread Safe)</span>
+            </label>
+            <span class="hint-text">Turn off to demonstrate un-synchronized lost updates / race conditions.</span>
+          </div>
+        </div>
+
+        <div class="stress-action-row">
+          <button id="btn-launch-rush" class="btn btn-primary btn-lg">
+            🚀 Launch Peak Runner Rush (<span id="btn-runner-count">30</span> Concurrent Threads)
+          </button>
+        </div>
+
+        <!-- Stress Test Outcome Banner -->
+        <div id="stress-result-banner" class="stress-result" style="display: none;">
+          <div class="result-header" id="result-title">Result</div>
+          <div class="result-details" id="result-details"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deadlock Analysis & Execution Log -->
+    <div class="grid-2-col">
+      <!-- Deadlock Proof & Coffman Matrix -->
+      <div class="card">
+        <div class="card-header">
+          <div class="title-with-icon">
+            <span class="card-icon">🛡️</span>
+            <div>
+              <h2>Deadlock Avoidance Architecture</h2>
+              <span class="concept-tag tag-deadlock">Coffman Conditions Proof</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <table class="coffman-table">
+            <thead>
+              <tr>
+                <th>Coffman Condition</th>
+                <th>System Design</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Mutual Exclusion</strong></td>
+                <td>Resources protected via Station & Vault Mutexes</td>
+                <td><span class="badge badge-green">Enforced</span></td>
+              </tr>
+              <tr>
+                <td><strong>2. Hold & Wait</strong></td>
+                <td>Runners request one station at a time. Stations do not request from each other.</td>
+                <td><span class="badge badge-green">Prevented</span></td>
+              </tr>
+              <tr>
+                <td><strong>3. No Preemption</strong></td>
+                <td>Only the lock holder can release the lock after completing atomic transfer.</td>
+                <td><span class="badge badge-green">Enforced</span></td>
+              </tr>
+              <tr>
+                <td><strong>4. Circular Wait</strong></td>
+                <td>Strict resource hierarchy: <code>Vault Mutex &rarr; Station Mutex</code>. Centralized Station D Banker.</td>
+                <td><span class="badge badge-purple">MATHEMATICALLY ELIMINATED</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="summary-note">
+            Because Station D is the <em>sole</em> entity that modifies station inventories and follows a strict hierarchical locking sequence, circular wait dependencies ($L_1 \rightarrow L_2 \rightarrow \dots \rightarrow L_1$) are impossible.
+          </p>
+        </div>
+      </div>
+
+      <!-- Live OS Execution Trace Console -->
+      <div class="card">
+        <div class="card-header">
+          <div class="title-with-icon">
+            <span class="card-icon">💻</span>
+            <div>
+              <h2>Live OS Execution Trace</h2>
+              <span class="concept-tag tag-log">Real-Time Concurrency Audit Trail</span>
+            </div>
+          </div>
+          <div class="log-actions">
+            <button class="btn btn-xs btn-outline" id="btn-clear-log">Clear</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="log-filter-bar">
+            <span class="filter-chip active" data-filter="ALL">ALL</span>
+            <span class="filter-chip" data-filter="MUTEX">MUTEX</span>
+            <span class="filter-chip" data-filter="SEMAPHORE">SEMAPHORE</span>
+            <span class="filter-chip" data-filter="COND_VAR">COND VAR</span>
+            <span class="filter-chip" data-filter="RUNNER">RUNNERS</span>
+            <span class="filter-chip" data-filter="OPERATOR">OPERATOR</span>
+          </div>
+          <div class="console-box" id="console-logs">
+            <div class="log-line log-info">[00:00:00.000] Simulation initialized and ready.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Operating Systems Project • Group 2: Aid Station Resource Management • Mutexes, Semaphores, Condition Variables & Deadlock Avoidance</p>
+    </footer>
+  </div>
+
+  <!-- Initial Setup Modal -->
+  <div class="modal-overlay" id="setup-modal" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Configure Initial Vault & Station Stocks</h3>
+        <button class="btn-close" id="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <h4>1. Central Vault Initial Reserve</h4>
+          <div class="input-grid-3">
+            <div>
+              <label>Drinks (Vault):</label>
+              <input type="number" id="inp-vault-drinks" value="200" min="50" max="1000">
+            </div>
+            <div>
+              <label>Snacks (Vault):</label>
+              <input type="number" id="inp-vault-snacks" value="200" min="50" max="1000">
+            </div>
+            <div>
+              <label>Meds (Vault):</label>
+              <input type="number" id="inp-vault-meds" value="100" min="20" max="500">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h4>2. Station A Initial Allocation (Mile 5)</h4>
+          <div class="input-grid-3">
+            <div><label>Drinks:</label><input type="number" id="inp-a-drinks" value="40" min="0"></div>
+            <div><label>Snacks:</label><input type="number" id="inp-a-snacks" value="30" min="0"></div>
+            <div><label>Meds:</label><input type="number" id="inp-a-meds" value="15" min="0"></div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h4>3. Station B Initial Allocation (Mile 13)</h4>
+          <div class="input-grid-3">
+            <div><label>Drinks:</label><input type="number" id="inp-b-drinks" value="50" min="0"></div>
+            <div><label>Snacks:</label><input type="number" id="inp-b-snacks" value="40" min="0"></div>
+            <div><label>Meds:</label><input type="number" id="inp-b-meds" value="20" min="0"></div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h4>4. Station C Initial Allocation (Finish Line)</h4>
+          <div class="input-grid-3">
+            <div><label>Drinks:</label><input type="number" id="inp-c-drinks" value="40" min="0"></div>
+            <div><label>Snacks:</label><input type="number" id="inp-c-snacks" value="30" min="0"></div>
+            <div><label>Meds:</label><input type="number" id="inp-c-meds" value="15" min="0"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-cancel-modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-setup">Apply & Reset Simulation</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
